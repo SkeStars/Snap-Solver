@@ -868,7 +868,14 @@ class SnapSolver {
                 dragMode: 'move',
                 aspectRatio: NaN,
                 modal: true,
-                background: true
+                background: true,
+                ready: function() {
+                    // 如果有上次保存的裁剪框数据，应用它
+                    if (self.lastCropBoxData) {
+                        self.cropper.setCropBoxData(self.lastCropBoxData);
+                        console.log('Applied saved crop box data');
+                    }
+                }
             });
         } catch (error) {
             console.error('Failed to initialize cropper', error);
@@ -940,6 +947,9 @@ class SnapSolver {
     setupCropEvents() {
         // 移除裁剪按钮的点击事件监听
 
+        // 存储裁剪框数据
+        this.lastCropBoxData = null;
+
         // Crop confirm button
         document.getElementById('cropConfirm').addEventListener('click', () => {
             if (!this.checkConnectionBeforeAction()) return;
@@ -956,6 +966,9 @@ class SnapSolver {
                     // Get and validate crop box data
                     const cropBoxData = this.cropper.getCropBoxData();
                     console.log('Crop box data:', cropBoxData);
+                    
+                    // 保存裁剪框数据以便下次使用
+                    this.lastCropBoxData = cropBoxData;
                     
                     if (!cropBoxData || typeof cropBoxData.width !== 'number' || typeof cropBoxData.height !== 'number') {
                         throw new Error('Invalid crop box data');
@@ -1008,6 +1021,22 @@ class SnapSolver {
                     this.updateImageActionButtons();
                     
                     window.uiManager.showToast('裁剪成功');
+                    
+                    // 获取当前模型信息
+                    const settings = window.settingsManager.getSettings();
+                    const supportsMultimodal = settings.modelInfo?.supportsMultimodal || false;
+                    
+                    // 如果模型支持多模态，自动发送至AI
+                    if (supportsMultimodal) {
+                        setTimeout(() => {
+                            // 显示Claude分析面板
+                            this.claudePanel.classList.remove('hidden');
+                            this.emptyState.classList.add('hidden');
+                            
+                            // 发送图像到Claude进行分析
+                            this.sendImageToClaude(this.croppedImage);
+                        }, 500); // 短暂延迟以确保UI更新
+                    }
                 } catch (error) {
                     console.error('Cropping error details:', {
                         message: error.message,
@@ -1035,6 +1064,15 @@ class SnapSolver {
             // 取消裁剪时隐藏图像预览和相关按钮
             this.imagePreview.classList.add('hidden');
             document.querySelector('.crop-area').innerHTML = '';
+        });
+        
+        // Crop reset button
+        document.getElementById('cropReset').addEventListener('click', () => {
+            if (this.cropper) {
+                // 重置裁剪区域到默认状态
+                this.cropper.reset();
+                window.uiManager.showToast('已重置裁剪区域');
+            }
         });
     }
 
